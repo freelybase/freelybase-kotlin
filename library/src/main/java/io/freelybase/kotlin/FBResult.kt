@@ -1,0 +1,161 @@
+package io.freelybase.kotlin
+
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+// ── 结果类型 ──────────────────────────────────────────────────────────────────
+
+sealed class FBResult<out T> {
+    data class Success<T>(val data: T) : FBResult<T>()
+    data class Failure(val error: FreelyBaseException) : FBResult<Nothing>()
+
+    val isSuccess get() = this is Success
+    val isFailure get() = this is Failure
+
+    fun getOrNull(): T? = if (this is Success) data else null
+    fun getOrThrow(): T = when (this) {
+        is Success -> data
+        is Failure -> throw error
+    }
+    fun getOrDefault(default: @UnsafeVariance T): T = if (this is Success) data else default
+
+    inline fun <R> map(transform: (T) -> R): FBResult<R> = when (this) {
+        is Success -> try { Success(transform(data)) } catch (e: Exception) {
+            Failure(FreelyBaseException(e.message ?: "转换失败", detail = e.message ?: "转换失败"))
+        }
+        is Failure -> this
+    }
+}
+
+// ── FBCall：链式调用构建器 ────────────────────────────────────────────────────
+
+/**
+ * 封装一个异步操作，行为与 Firebase Task 一致：
+ * 配置回调后自动在后台执行，回调切回主线程，无需手动 launch。
+ *
+ * 用法：
+ * ```kotlin
+ * // 直接调用，无需 launch
+ * FBUser.loginAs<AppUser>("zhangsan", "123456")
+ *     .onLoading { btnLogin.isEnabled = false }
+ *     .onSuccess { user -> log(user.username) }
+ *     .onFailure { e -> toast(e.detail) }
+ *     .onFinally { btnLogin.isEnabled = true }
+ *
+ * // 绑定生命周期（推荐，页面销毁时自动取消）
+ * FBUser.loginAs<AppUser>("zhangsan", "123456")
+ *     .onSuccess { log(it.username) }
+ *     .onFailure { toast(it.detail) }
+ *     .bindTo(this)   // this 是 Activity / Fragment
+ *
+ * // 在协程中 await 拿 FBResult
+ * val result = FBUser.loginAs<AppUser>("zhangsan", "123456").await()
+ * ```
+ */
+class FBCall<T>(internal val block: suspend () -> T) {
+
+    private var onLoading: (() -> Unit)? = null
+    private var onSuccess: ((T) -> Unit)? = null
+    private var onFailure: ((FreelyBaseException) -> Unit)? = null
+    private var onFinally: (() -> Unit)? = null
+    
+    // 保存当前执行的 Job，用于取消
+    private var job: kotlinx.coroutines.Job? = null
+
+    /** 请求开始前（主线程）。配置后自动触发执行。 */
+    fun onLoading(block: () -> Unit): FBCall<T> {
+        onLoading = block
+        return this
+    }
+
+    /** 请求成功（主线程）。配置后自动触发执行。 */
+    fun onSuccess(block: (T) -> Unit): FBCall<T> {
+        onSuccess = block
+        execute(FreelyBase.appScope)
+        return this
+    }
+
+    /** 请求失败（主线程）。配置后自动触发执行。 */
+    fun onFailure(block: (FreelyBaseException) -> Unit): FBCall<T> {
+        onFailure = block
+        execute(FreelyBase.appScope)
+        return this
+    }
+
+    /** 无论成功失败都执行（主线程，在 onSuccess/onFailure 之后）。 */
+    fun onFinally(block: () -> Unit): FBCall<T> {
+        onFinally = block
+        execute(FreelyBase.appScope)
+        return this
+    }
+
+    /**
+     * 绑定生命周期（推荐）。
+     * 使用 Activity/Fragment 的 lifecycleScope，页面销毁时自动取消请求。
+     * 若已自动执行，此方法无效（请求只执行一次）。
+     */
+    fun bindTo(owner: LifecycleOwner): FBCall<T> {
+        execute(owner.lifecycleScope)
+        return this
+    }
+
+    /** 在指定 CoroutineScope 中执行（高级用法）。若已执行，此方法无效。 */
+    fun launch(scope: CoroutineScope): FBCall<T> {
+        execute(scope)
+        return this
+    }
+    
+    /**
+     * 取消当前请求。
+     * 
+     * 用于中断正在执行的请求，特别是在流式响应时。
+     */
+    fun cancel() {
+        job?.cancel()
+        job = null
+    }
+
+    /** 挂起等待结果，返回 FBResult（在已有协程中使用）。 */
+    suspend fun await(): FBResult<T> = try {
+        FBResult.Success(block())
+    } catch (e: FreelyBaseException) {
+        FBResult.Failure(e)
+    } catch (e: Exception) {
+        FBResult.Failure(FreelyBaseException(e.message ?: "未知错误", detail = e.message ?: "未知错误"))
+    }
+
+    // ── 内部 ─────────────────────────────────────────────────────────────────
+
+    private var executed = false
+
+    private fun execute(scope: CoroutineScope) {
+        if (executed) return   // 防止重复执行
+        executed = true
+        job = scope.launch(Dispatchers.Main) {
+            onLoading?.invoke()
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    FBResult.Success(block())
+                } catch (e: FreelyBaseException) {
+                    FBResult.Failure(e)
+                } catch (e: Exception) {
+                    FBResult.Failure(
+                        FreelyBaseException(e.message ?: "未知错误", detail = e.message ?: "未知错误")
+                    )
+                }
+            }
+            when (result) {
+                is FBResult.Success -> onSuccess?.invoke(result.data)
+                is FBResult.Failure -> onFailure?.invoke(result.error)
+            }
+            onFinally?.invoke()
+        }
+    }
+}
+
+/** 将 suspend 块包装为 FBCall */
+fun <T> fbCall(block: suspend () -> T): FBCall<T> = FBCall(block)
