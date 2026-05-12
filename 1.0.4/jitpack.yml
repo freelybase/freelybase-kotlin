@@ -1,3 +1,0 @@
-install:
-  - FILE="-Dfile=freelybase-sdk-1.0.4.aar"
-  - mvn install:install-file $FILE -DgroupId=com.freelybase -DartifactId=freelybase-kotlin -Dversion=1.0.4 -Dpackaging=aar -DgeneratePom=true
