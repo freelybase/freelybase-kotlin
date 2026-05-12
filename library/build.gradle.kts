@@ -49,7 +49,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 }
 group = "io.freelybase.kotlin"
-version = "1.0.2"
+version = "1.0.3"
 
 afterEvaluate {
     publishing {
