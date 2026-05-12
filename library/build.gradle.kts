@@ -49,7 +49,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 }
 group = "io.freelybase.kotlin"
-version = "1.0.6"
+version = "1.0.7"
 
 afterEvaluate {
     publishing {
@@ -57,7 +57,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 from(components["release"])
                 groupId = group.toString()
-                artifactId = "freelybase-kotlin"
+                artifactId = "freely-kotlin"
                 version = project.version.toString()
             }
         }

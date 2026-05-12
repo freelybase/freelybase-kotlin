@@ -34,8 +34,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnAi.setOnClickListener {
-            if (!FreelyBase.isLoggedIn()) { Toast.makeText(this, "请先登录", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
-            startActivity(Intent(this, AiActivity::class.java))
+//            if (!FreelyBase.isLoggedIn()) { Toast.makeText(this, "请先登录", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+//            startActivity(Intent(this, AiActivity::class.java))
         }
 
         binding.btnServerTime.setOnClickListener {
