@@ -1,7 +1,7 @@
 # jitpack.yml
 before_install:
-  - wget https://github.com/freelybase/freelybase-android/releases/download/${VERSION}/freelybase-android-${VERSION}.aar
-  - wget https://github.com/freelybase/freelybase-android/releases/download/${VERSION}/freelybase-android-${VERSION}.pom
+  - wget https://github.com/freelybase/freelybase-kotlin/releases/download/${VERSION}/freelybase-kotlin-${VERSION}.aar
+  - wget https://github.com/freelybase/freelybase-kotlin/releases/download/${VERSION}/freelybase-kotlin-${VERSION}.pom
 
 install:
-  - mvn install:install-file -Dfile=freelybase-android-${VERSION}.aar -DgroupId=com.github.freelybase -DartifactId=freelybase-android -Dversion=${VERSION} -Dpackaging=aar -DpomFile=freelybase-android-${VERSION}.pom
+  - mvn install:install-file -Dfile=freelybase-kotlin-${VERSION}.aar -DgroupId=com.github.freelybase -DartifactId=freelybase-kotlin -Dversion=${VERSION} -Dpackaging=aar -DpomFile=freelybase-kotlin-${VERSION}.pom
